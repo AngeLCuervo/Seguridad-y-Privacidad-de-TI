@@ -1,0 +1,44 @@
+server:
+  port: 8080
+
+spring:
+  application:
+    name: auth-backend
+  security:
+    oauth2:
+      client:
+        registration:
+          github:
+            client-id: ${GITHUB_CLIENT_ID}
+            client-secret: ${GITHUB_CLIENT_SECRET}
+            scope: read:user,user:email
+    user:
+      name: admin
+      password: admin123
+
+jwt:
+  secret: "clave-super-secreta-de-al-menos-256-bits-para-HS256-en-produccion-usar-RSA"
+  expiration-ms: 86400000
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+  endpoint:
+    health:
+      show-details: always
+  metrics:
+    export:
+      otlp:
+        enabled: false
+        url: http://localhost:4318/v1/metrics
+        step: 30s
+
+logging:
+  level:
+    com.seguridad: DEBUG
+    org.springframework.security: INFO
+    io.micrometer.registry.otlp: OFF
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss} [%thread] [traceId=%X{traceId}] %-5level %logger{36} - %msg%n"

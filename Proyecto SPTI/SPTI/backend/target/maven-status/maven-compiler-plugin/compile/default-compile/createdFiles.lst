@@ -1,0 +1,8 @@
+com\seguridad\config\OtelOAuthSuccessHandler.class
+com\seguridad\filter\JwtAuthFilter.class
+com\seguridad\controller\HelloController.class
+com\seguridad\security\JwtUtils.class
+com\seguridad\config\SecurityConfig.class
+com\seguridad\controller\AuthController.class
+com\seguridad\controller\AuthController$LoginRequest.class
+com\seguridad\AuthBackendApplication.class

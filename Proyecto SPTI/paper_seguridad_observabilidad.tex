@@ -1,0 +1,908 @@
+\documentclass[12pt, a4paper]{article}
+
+% ─── Paquetes esenciales ──────────────────────────────────────────────────────
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{geometry}
+\geometry{margin=2.5cm, headheight=15pt}
+\usepackage{setspace}
+\onehalfspacing
+
+\usepackage{graphicx}
+\usepackage{hyperref}
+\hypersetup{
+    colorlinks=true,
+    linkcolor=black,
+    citecolor=blue,
+    urlcolor=blue
+}
+\usepackage{amsmath, amssymb}
+\usepackage{booktabs}
+\usepackage{tabularx}
+\usepackage{array}
+\usepackage{longtable}
+\usepackage{xcolor}
+\usepackage{listings}
+\usepackage{caption}
+\usepackage{subcaption}
+\usepackage{enumitem}
+\usepackage{fancyhdr}
+\usepackage{titlesec}
+\usepackage{abstract}
+\usepackage{cite}
+% microtype removed for compatibility
+
+% ─── Configuración de cabeceras ───────────────────────────────────────────────
+\pagestyle{fancy}
+\fancyhf{}
+\rhead{\small Seguridad en Aplicaciones}
+\lhead{\small Observabilidad e Inicio de Sesión Seguro}
+\cfoot{\thepage}
+\renewcommand{\headrulewidth}{0.4pt}
+
+% ─── Estilo de secciones ──────────────────────────────────────────────────────
+\titleformat{\section}{\large\bfseries}{\thesection.}{0.5em}{}
+\titleformat{\subsection}{\normalsize\bfseries}{\thesubsection.}{0.5em}{}
+\titleformat{\subsubsection}{\normalsize\itshape}{\thesubsubsection.}{0.5em}{}
+
+% ─── Configuración de listings (código) ───────────────────────────────────────
+\lstset{
+  basicstyle=\small\ttfamily,
+  breaklines=true,
+  frame=single,
+  backgroundcolor=\color{gray!8},
+  keywordstyle=\color{blue}\bfseries,
+  commentstyle=\color{gray},
+  stringstyle=\color{red!70!black},
+  numbers=left,
+  numberstyle=\tiny\color{gray},
+  xleftmargin=1.5em,
+  framexleftmargin=1.5em,
+  captionpos=b
+}
+
+% ═════════════════════════════════════════════════════════════════════════════
+\begin{document}
+% ═════════════════════════════════════════════════════════════════════════════
+
+% ─── Portada ─────────────────────────────────────────────────────────────────
+\begin{titlepage}
+  \centering
+  \vspace*{1.5cm}
+
+  {\LARGE \textbf{De Contraseñas a Passkeys: Evolución del Inicio de Sesión
+  Seguro y Observabilidad en Aplicaciones Web, Móviles y de Escritorio}}\\[1.8cm]
+
+  {\large Trabajo de Grado --- Seguridad en Aplicaciones}\\[0.5cm]
+  {\large Ingeniería de Sistemas}\\[2.5cm]
+
+  {\normalsize \textit{Presentado por:}}\\[0.4cm]
+  {\large \textbf{[Nombre del estudiante]}}\\[2cm]
+
+  {\normalsize \textit{Docente:}}\\[0.4cm]
+  {\large \textbf{[Nombre del docente]}}\\[2.5cm]
+
+  {\large [Nombre de la Universidad]}\\[0.3cm]
+  {\large Facultad de Ingeniería}\\[1.5cm]
+
+  {\large \today}
+  \vfill
+\end{titlepage}
+
+% ─── Resumen / Abstract ───────────────────────────────────────────────────────
+\begin{abstract}
+\noindent
+La gestión de identidades digitales y la supervisión del comportamiento de las
+aplicaciones representan dos de los desafíos más críticos de la ingeniería de
+software contemporánea. Los esquemas de autenticación fundamentados en
+contraseñas estáticas han demostrado ser sistémicamente vulnerables frente a
+ataques de phishing, credential stuffing y toma de control de cuentas (ATO,
+\textit{Account Takeover}), vectores responsables de pérdidas económicas
+globales estimadas en 9,5 billones de dólares anuales \cite{authx2025}.
+Paralelamente, la creciente complejidad de las arquitecturas distribuidas ---
+microservicios, contenedores efímeros y despliegues multinube --- invalida los
+modelos de monitoreo tradicional basados en umbrales estáticos, incapaces de
+correlacionar eventos de alto nivel con acciones maliciosas a nivel de kernel.
+
+Este trabajo presenta un análisis técnico y arquitectónico de los mecanismos
+modernos de inicio de sesión seguro y de los paradigmas de observabilidad
+profunda. Se examina la transición desde contraseñas hasta passkeys bajo los
+estándares FIDO2/WebAuthn y el marco OAuth 2.0 con PKCE, diferenciando las
+estrategias de implementación en plataformas web, móviles y de escritorio. Se
+analiza además la integración de OpenTelemetry y eBPF (\textit{extended
+Berkeley Packet Filter}) como pilares de observabilidad, contrastándolos con el
+monitoreo clásico. El trabajo concluye con la evaluación de conformidad de la
+arquitectura propuesta frente al estándar NIST SP 800-63-4 \cite{nist80063},
+el OWASP Top 10 \cite{owasptop10} y el marco normativo colombiano
+(Leyes 1273 de 2009 y 1581 de 2012).
+
+\bigskip
+\noindent\textbf{Palabras clave:} autenticación, passkeys, FIDO2, WebAuthn,
+OAuth 2.0, PKCE, observabilidad, OpenTelemetry, eBPF, Zero Trust, seguridad
+de aplicaciones, NIST SP 800-63-4.
+\end{abstract}
+
+\newpage
+\tableofcontents
+\newpage
+
+% ═════════════════════════════════════════════════════════════════════════════
+\section{Introducción}
+% ═════════════════════════════════════════════════════════════════════════════
+
+La transformación digital ha disuelto los perímetros de red tradicionales. La
+proliferación del cómputo en la nube, los ecosistemas de dispositivos móviles, el
+modelo BYOD (\textit{Bring Your Own Device}) y las arquitecturas de
+microservicios han fragmentado la infraestructura hasta el punto en que cada
+componente --- desde un contenedor efímero hasta un dispositivo personal ---
+representa una superficie de ataque individual que debe protegerse de forma
+independiente \cite{zerotrust2025}. En este entorno hiperconectado, la
+\textbf{identidad del usuario} se ha convertido en la nueva frontera de control.
+
+El inicio de sesión es el mecanismo algorítmico que determina quién interactúa
+con el sistema, en qué contexto y con qué nivel de privilegios. Sin embargo, el
+modelo históricamente dominante --- la contraseña estática como ``secreto
+compartido'' --- presenta vulnerabilidades estructurales insalvables. La
+reutilización masiva de credenciales (más del 50\% de los usuarios reutiliza la
+misma contraseña en al menos cinco cuentas \cite{frontegg2025}), combinada con
+el acceso industrializado a bases de datos filtradas en la Dark Web, ha
+convertido el \textit{credential stuffing} y el ATO en fenómenos de escala
+industrial.
+
+De forma paralela, la incapacidad del monitoreo tradicional para detectar
+intrusiones basadas en credenciales legítimas expone una brecha operacional
+profunda. Cuando un atacante accede con credenciales válidas pero robadas, los
+indicadores clásicos de salud del sistema (CPU, memoria, tráfico de red) no
+registran anomalía alguna, lo cual es reconocido por OWASP como ``Fallas en el
+Registro y Monitoreo de Seguridad'' (A09:2021) \cite{owasptop10}.
+
+Este trabajo aborda la intersección de ambas problemáticas, proponiendo una
+arquitectura de ``Seguridad por Diseño'' (\textit{Secure by Design})
+\cite{owaspSBD} que integra (a) flujos de autenticación sin contraseña basados
+en criptografía asimétrica y (b) una malla de observabilidad profunda
+sustentada en OpenTelemetry y eBPF.
+
+% ═════════════════════════════════════════════════════════════════════════════
+\section{Marco Teórico}
+% ═════════════════════════════════════════════════════════════════════════════
+
+\subsection{Fundamentos de Seguridad de la Información}
+
+La seguridad de la información descansa sobre la tríada CIA (\textit{Confidentiality,
+Integrity, Availability}), a la que los marcos modernos agregan el
+\textbf{No Repudio} como cuarto pilar \cite{iso27001}:
+
+\begin{itemize}[noitemsep]
+  \item \textbf{Confidencialidad:} Acceso restringido a entidades autorizadas,
+        garantizado mediante cifrado de estado del arte (AES-256 en reposo,
+        TLS 1.3 en tránsito).
+  \item \textbf{Integridad:} Inmutabilidad de los datos, respaldada por
+        funciones hash criptográficas (SHA-256 o superior) y firmas digitales.
+  \item \textbf{Disponibilidad:} Acceso oportuno a recursos para usuarios
+        legítimos, mitigando amenazas DoS/DDoS.
+  \item \textbf{No Repudio:} Garantía criptográfica de que una acción no puede
+        ser negada por quien la originó.
+\end{itemize}
+
+La estrategia de \textbf{Defensa en Profundidad} (\textit{Defense in Depth})
+asume que ningún control individual es invulnerable, por lo que exige capas
+superpuestas de protección \cite{iso27001}. La \textbf{Arquitectura Zero Trust}
+\cite{zerotrust2025,nistZTA} materializa este principio con el axioma
+``\textit{nunca confiar, siempre verificar}'': toda solicitud de acceso debe
+autenticarse y autorizarse dinámicamente, independientemente de la ubicación
+topológica del solicitante.
+
+\subsection{Panorama de Amenazas}
+
+El contexto global y regional justifica la urgencia de adoptar controles modernos.
+A nivel mundial, los costos del cibercrimen superan los 9,5 billones de dólares
+anuales \cite{authx2025}. En Colombia, el MinTIC reportó más de 36.000 millones
+de intentos de ciberataque durante 2024 \cite{acis2024}, mientras las denuncias
+por delitos informáticos crecieron un 23\% interanual, superando los 77.600 casos
+\cite{ccit2024}. Los vectores más frecuentes continúan siendo el phishing dirigido,
+el ransomware y la suplantación de identidad digital.
+
+Los ataques de \textit{credential stuffing} ilustran la industrialización del
+fraude: utilizando botnets e infraestructuras de proxies residenciales, los
+actores maliciosos automatizan millones de intentos de autenticación con
+credenciales filtradas. Análisis del tráfico corporativo revelan que en promedio
+el 19\% de todos los intentos de autenticación diarios corresponde a ataques de
+este tipo, cifra que puede alcanzar el 44\% durante picos coordinados
+\cite{verizon2025}.
+
+\subsection{Evolución de la Autenticación Digital}
+\label{sec:evolucion}
+
+La industria ha transitado por cuatro etapas evolutivas claramente diferenciadas:
+
+\subsubsection{Contraseñas Estáticas (Secreto Compartido)}
+
+El modelo tradicional almacena en el servidor un hash de la contraseña del usuario.
+Su vulnerabilidad estructural radica en que ambos extremos del canal deben
+conocer (o derivar) el mismo secreto. Una brecha en la base de datos del servidor
+compromete todas las cuentas, especialmente cuando se usan algoritmos obsoletos
+(MD5, SHA-1 sin \textit{salting}) \cite{googleModernPass}.
+
+\subsubsection{Autenticación Multifactor Básica (MFA)}
+
+La MFA clásica combina \textit{algo que el usuario sabe} (contraseña) con
+\textit{algo que posee} (dispositivo móvil) o \textit{algo que es} (biometría).
+Los códigos OTP por SMS, sin embargo, son susceptibles al secuestro del protocolo
+SS7, la clonación de SIM (\textit{SIM swapping}) y los ataques
+AiTM\footnote{AiTM: \textit{Adversary-in-the-Middle}, donde el atacante
+intercepta en tiempo real la contraseña y el código OTP.} \cite{srivathsav2025}.
+
+\subsubsection{MFA Resistente al Phishing}
+
+Los estándares FIDO U2F introdujeron llaves de seguridad hardware cuya respuesta
+criptográfica está vinculada al \textit{Origin} (nombre de dominio verificado) del
+sitio. Si el usuario es engañado y navega a una URL falsa, el token se niega a
+generar una firma válida para ese dominio, abortando el ataque
+\cite{frontegg2025,srivathsav2025}.
+
+\subsubsection{Passkeys y el Estándar FIDO2 / WebAuthn}
+\label{sec:passkeys}
+
+Los \textbf{passkeys} representan la eliminación total de la contraseña como factor
+humano. Fundamentados en la especificación WebAuthn del W3C y el protocolo CTAP2
+de la FIDO Alliance \cite{mojoauth2025}, operan mediante criptografía asimétrica:
+
+\begin{enumerate}[noitemsep]
+  \item \textbf{Registro:} El dispositivo genera un par de claves asimétricas
+        único para cada dominio. La \textbf{clave privada} queda protegida en el
+        enclave seguro del dispositivo (Secure Enclave en iOS/macOS, TPM en
+        Windows); la \textbf{clave pública} se almacena en el servidor.
+  \item \textbf{Autenticación:} El servidor emite un \textit{challenge} aleatorio.
+        El dispositivo, previa verificación biométrica local, firma el challenge
+        con la clave privada. El servidor verifica la firma con la clave pública
+        registrada.
+\end{enumerate}
+
+\noindent La clave privada \textbf{jamás abandona el dispositivo} y está
+bloqueada por biometría (FaceID, TouchID, Windows Hello) o PIN local. Este diseño
+erradica algorítmicamente el \textit{credential stuffing}: no hay contraseñas
+almacenadas en los servidores que puedan robarse. Empíricamente, los passkeys
+logran tasas de éxito en el inicio de sesión superiores al 98\%, reducen la
+fricción hasta en un 80\% y ofrecen inmunidad nativa al phishing
+\cite{mojoauth2025,authsignal2025}.
+
+\subsection{Arquitectura de Seguridad Moderna: OAuth 2.0, OIDC y JWT}
+\label{sec:oauth}
+
+En arquitecturas distribuidas, la autenticación se desacopla lógicamente de los
+servicios de negocio mediante protocolos estándar:
+
+\subsubsection{JSON Web Tokens (JWT)}
+
+Tras validar las credenciales, el servidor de identidad emite un JWT firmado
+criptográficamente. El token contiene \textit{claims} sobre la identidad y los
+permisos del usuario en su \textit{payload}. Los microservicios validan
+matemáticamente la autenticidad del token verificando su firma, sin consultas
+sincrónicas a la base de datos central, lo que maximiza escalabilidad y
+rendimiento \cite{frontegg2025}.
+
+\subsubsection{OAuth 2.0 Authorization Code con PKCE}
+
+Los clientes públicos (SPAs, aplicaciones móviles nativas, apps de escritorio)
+no pueden almacenar de forma segura un \textit{client\_secret}. La extensión
+\textbf{PKCE} (\textit{Proof Key for Code Exchange}) resuelve esta limitación
+mediante inyección de entropía dinámica \cite{srivathsav2025}:
+
+\begin{enumerate}[noitemsep]
+  \item El cliente genera aleatoriamente un \texttt{code\_verifier} y calcula
+        su hash SHA-256: el \texttt{code\_challenge}.
+  \item Envía solo el \texttt{code\_challenge} al servidor de autorización al
+        iniciar el flujo.
+  \item Al canjear el código de autorización por el token, el cliente revela el
+        \texttt{code\_verifier} original.
+  \item El servidor verifica que \texttt{SHA-256(code\_verifier) == code\_challenge}.
+\end{enumerate}
+
+Un atacante que intercepte el código de autorización no conoce el
+\texttt{code\_verifier} almacenado en la memoria del proceso legítimo, por lo que
+el intento de canje fracasará inevitablemente. PKCE es el estándar obligatorio en
+2025 para todo tipo de clientes, incluyendo aplicaciones de escritorio
+\cite{hypr2025,srivathsav2025}.
+
+\subsection{Niveles de Garantía de Autenticación: NIST SP 800-63-4}
+\label{sec:nist}
+
+El NIST publicó en 2025 la cuarta revisión de sus Directrices de Identidad
+Digital (SP 800-63-4) \cite{nist80063}, estableciendo tres niveles de garantía
+(AAL, \textit{Authenticator Assurance Levels}):
+
+\begin{table}[h!]
+\centering
+\caption{Niveles de Garantía de Autenticación según NIST SP 800-63-4}
+\label{tab:aal}
+\begin{tabularx}{\textwidth}{>{\bfseries}l X X}
+\toprule
+Nivel & Requisitos & Aplicaciones Típicas \\
+\midrule
+AAL1 & Un solo factor. Desaconsejado para datos personales o sensibles en 2025. &
+      Aplicaciones públicas de bajo riesgo. \\[4pt]
+AAL2 & MFA obligatoria. \textbf{Passkeys sincronizables autorizados
+       explícitamente.} Resistencia al phishing promovida. &
+      Nueva línea base para aplicaciones corporativas y comerciales. \\[4pt]
+AAL3 & Máxima garantía. \textbf{Prohíbe passkeys sincronizables.} Exige claves
+       ligadas al hardware (\textit{device-bound keys}) no exportables (TPM,
+       Secure Enclave). &
+      Infraestructura gubernamental, sistemas financieros críticos. \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+La distinción clave del AAL3 es que ni siquiera el proveedor del sistema operativo
+puede exportar la clave privada del usuario; ésta queda sellada en el chip
+criptográfico del dispositivo físico \cite{nist80063,hypr2025}.
+
+\subsection{Observabilidad Profunda vs. Monitoreo Tradicional}
+\label{sec:obs}
+
+\subsubsection{El Abismo Semántico}
+
+El monitoreo tradicional opera sobre métricas de infraestructura predefinidas
+(CPU, memoria, latencia) y emite alertas cuando se supera un umbral estático.
+Es inherentemente \textbf{reactivo}: detecta ``qué componente falló'' solo ante
+problemas conocidos (\textit{known unknowns}). Cuando un atacante usa
+credenciales válidas pero robadas, los indicadores de salud permanecen normales.
+OWASP cataloga esta incapacidad como A09:2021 \cite{owasptop10}.
+
+La \textbf{observabilidad} es una propiedad arquitectónica diseñada desde la
+concepción del sistema: permite inferir su estado interno a partir de la
+correlación de sus salidas externas. Es proactiva y causal --- responde
+``\textit{por qué falló}'' y permite descubrir anomalías desconocidas
+(\textit{unknown unknowns}) \cite{newrelic2025,crowdstrike2025,dynatrace2025}.
+
+\begin{table}[h!]
+\centering
+\caption{Monitoreo Tradicional vs. Observabilidad Profunda}
+\label{tab:monvsobs}
+\begin{tabularx}{\textwidth}{>{\bfseries}p{3cm} X X}
+\toprule
+Dimensión & Monitoreo Tradicional & Observabilidad Profunda (OTel + eBPF) \\
+\midrule
+Enfoque operacional & Reactivo. ``Qué ocurrió'' / ``El sistema falló''. &
+  Proactivo y causal. ``Por qué falló''. Análisis de causa raíz. \\[4pt]
+Alcance & Métricas de infraestructura predefinidas y logs locales aislados. &
+  Trazas distribuidas correlacionadas + captura a nivel de kernel. \\[4pt]
+Resolución de problemas & Fallos conocidos y recurrentes (\textit{knowns}). &
+  Fallos complejos y vectores de ataque novedosos (\textit{unknown unknowns}). \\[4pt]
+Aplicación en ciberseguridad & Detección de anomalías volumétricas obvias
+  (DDoS, bloqueos IP). &
+  Análisis comportamental en microsegundos, detección de exfiltración,
+  perfilado de atacantes persistentes. \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\subsubsection{Los Cuatro Pilares: Marco MELT}
+
+La observabilidad en seguridad de aplicaciones se fundamenta en el marco
+\textbf{MELT} (\textit{Metrics, Events, Logs, Traces}) \cite{newrelic2025}:
+métricas cuantitativas del sistema, eventos discretos con contexto de negocio,
+registros cronológicos estructurados y trazas distribuidas que correlacionan
+la ejecución de una solicitud a través de múltiples servicios.
+
+\subsubsection{OpenTelemetry (OTel)}
+
+OpenTelemetry \cite{opentelemetry} es un marco de código abierto respaldado por
+la CNCF (\textit{Cloud Native Computing Foundation}) que provee APIs, SDKs y
+agentes para la recolección estandarizada y agnóstica al proveedor
+(\textit{vendor-neutral}) de datos telemétricos. Su innovación crítica en
+ciberseguridad reside en la \textbf{trazabilidad distribuida}:
+
+Al registrarse una solicitud de inicio de sesión, el API Gateway inyecta
+automáticamente un \textbf{TraceID} único. Este identificador se propaga en las
+cabeceras de red a través de cada microservicio, base de datos y componente de
+infraestructura participante, permitiendo reconstruir la historia cronológica
+y causal de toda la transacción \cite{opentelemetry,horovits2025}. Si ese mismo
+TraceID aparece posteriormente asociado a consultas masivas y atípicas a bases
+de datos sensibles, la plataforma puede elevar automáticamente una alerta de
+exfiltración.
+
+\subsubsection{eBPF (\textit{Extended Berkeley Packet Filter})}
+
+eBPF \cite{linuxfoundation2025} es una tecnología revolucionaria integrada de
+forma nativa en el kernel Linux (y en adopción acelerada en Windows). A diferencia
+de los agentes tradicionales que operan en el \textit{user space} --- induciendo
+costosos cambios de contexto (\textit{context switches}) ---, eBPF permite
+inyectar y ejecutar programas personalizados directamente en el núcleo del
+sistema operativo sin recompilar el kernel ni cargar módulos inestables. Antes
+de su ejecución, estos programas son verificados por una máquina virtual interna
+que garantiza la seguridad del kernel.
+
+Desde la perspectiva de seguridad, eBPF ofrece tres capacidades estratégicas
+\cite{researchgate2024,groundcover2025}:
+
+\begin{enumerate}[noitemsep]
+  \item \textbf{Instrumentación de Cero Código} (\textit{Zero-Code Instrumentation}):
+        Captura llamadas al sistema (syscalls), eventos de red y operaciones de
+        disco con sobrecarga prácticamente nula (hasta 210 veces menos que
+        agentes en user space), sin requerir que los desarrolladores modifiquen
+        el código fuente.
+  \item \textbf{Detección de intrusiones a nivel de kernel:} Intercepta
+        en microsegundos intentos de lanzar shells remotas, modificar archivos
+        críticos del sistema o inyectar backdoors, exportando telemetría al SIEM
+        antes de que la instrucción maliciosa se consuma.
+  \item \textbf{Inspección pre/post-cifrado TLS:} Al operar antes de que los
+        paquetes sean cifrados por TLS o después de que sean descifrados,
+        eBPF garantiza que ninguna carga útil maliciosa pueda ocultarse dentro
+        de canales aparentemente legítimos y cifrados.
+\end{enumerate}
+
+% ═════════════════════════════════════════════════════════════════════════════
+\section{Marco Legal Colombiano}
+% ═════════════════════════════════════════════════════════════════════════════
+
+El diseño de sistemas de autenticación y observabilidad no es exclusivamente
+un problema de ingeniería; constituye una responsabilidad jurídica.
+
+\subsection{Ley 1273 de 2009 --- Delitos Informáticos}
+
+Esta ley modificó el Código Penal colombiano para tipificar los delitos
+informáticos, creando el bien jurídico tutelado ``de la protección de la
+información y de los datos'' \cite{ley1273}. Los artículos más relevantes para
+el diseño de sistemas de autenticación son:
+
+\begin{itemize}[noitemsep]
+  \item \textbf{Art. 269A (Acceso abusivo):} Sanciona el acceso a sistemas
+        informáticos sin autorización o excediendo los límites acordados. Esto
+        exige que la autenticación esté ligada a un sistema robusto de
+        autorización (e.g., RBAC) que impida la escalada de privilegios.
+  \item \textbf{Art. 269G (Suplantación de sitios web):} Penaliza la creación
+        de páginas fraudulentas para capturar credenciales. La implementación
+        de passkeys responde directamente a esta amenaza al vincular
+        criptográficamente la autenticación al dominio real del servicio.
+  \item \textbf{Art. 269I (Hurto por medios informáticos):} Sanciona suplantar
+        a un usuario ante sistemas de autenticación para cometer fraude.
+\end{itemize}
+
+\subsection{Ley 1581 de 2012 --- Protección de Datos Personales}
+
+Esta ley estatutaria regula el derecho fundamental al \textit{Habeas Data}
+\cite{ley1581}. Sus principios rectores imponen obligaciones directas sobre los
+sistemas de autenticación y observabilidad:
+
+\begin{itemize}[noitemsep]
+  \item \textbf{Principio de finalidad:} Los datos telemétricos recopilados
+        (IPs, identificadores de dispositivo, patrones de comportamiento) deben
+        usarse exclusivamente para los fines de seguridad informados al usuario.
+  \item \textbf{Principio de seguridad:} Obliga a implementar medidas técnicas
+        para evitar adulteración, pérdida o acceso no autorizado. En el contexto
+        de inicio de sesión, aplica a huellas biométricas, tokens de sesión y
+        telemetría comportamental.
+  \item \textbf{Principio de libertad:} El tratamiento de datos requiere
+        consentimiento previo, expreso e informado del titular.
+\end{itemize}
+
+% ═════════════════════════════════════════════════════════════════════════════
+\section{Propuesta de Arquitectura Integrada}
+% ═════════════════════════════════════════════════════════════════════════════
+
+La propuesta adopta un modelo de \textbf{Seguridad por Diseño} que adapta el
+flujo de autenticación a las particularidades de cada plataforma, integrando
+una malla de observabilidad profunda en el backend.
+
+\subsection{Implementación por Plataforma}
+
+\subsubsection{Aplicaciones Web}
+
+Las aplicaciones web operan en un entorno inherentemente hostil donde se ejecuta
+código JavaScript potencialmente no confiable. Las vulnerabilidades predominantes
+son XSS (\textit{Cross-Site Scripting}) y CSRF
+(\textit{Cross-Site Request Forgery}) \cite{stackhawk2025}. Las estrategias
+recomendadas son:
+
+\begin{itemize}[noitemsep]
+  \item \textbf{WebAuthn para passkeys:} Registrar los dispositivos del usuario
+        (sensores biométricos integrados, llaves FIDO USB) como autenticadores
+        de primera línea.
+  \item \textbf{Patrón BFF y cookies HttpOnly:} En lugar de almacenar JWT en
+        \texttt{localStorage} (vulnerable a XSS), utilizar el patrón
+        \textit{Backend-for-Frontend} o cookies con atributos
+        \texttt{HttpOnly}, \texttt{Secure} y \texttt{SameSite=Strict}
+        \cite{srivathsav2025}.
+  \item \textbf{Cabeceras de seguridad HTTP:} TLS 1.3 obligatorio, HSTS
+        (\textit{HTTP Strict Transport Security}) y una política CSP
+        (\textit{Content Security Policy}) restrictiva que controle el origen
+        de scripts ejecutables \cite{oligo2025}.
+\end{itemize}
+
+\subsubsection{Aplicaciones Móviles Nativas (iOS y Android)}
+
+Los dispositivos móviles combinan conectividad persistente con exposición física
+(redes Wi-Fi públicas, posibilidad de robo). El OWASP Mobile Top 10
+\cite{owaspMobile} subraya el almacenamiento inseguro de datos como
+vulnerabilidad crítica. Las contramedidas son:
+
+\begin{itemize}[noitemsep]
+  \item \textbf{Almacenamiento respaldado por hardware:} Los \textit{refresh
+        tokens} deben residir exclusivamente en el \textbf{Keychain} (iOS/Secure
+        Enclave) o el \textbf{Keystore} (Android/TEE o Titan M), garantizando
+        que no puedan extraerse en texto plano incluso ante un rooting o
+        jailbreak completo \cite{mdpi2025}.
+  \item \textbf{Autenticación biométrica como precondición:} FaceID, TouchID o
+        reconocimiento de iris deben requerirse antes de desbloquear
+        criptográficamente los tokens almacenados.
+  \item \textbf{Certificate Pinning:} La aplicación rechaza conexiones TLS a
+        menos que el certificado del servidor coincida con un hash embebido en
+        el binario compilado, neutralizando ataques AiTM en redes comprometidas
+        \cite{mdpi2025,touchlane2025}.
+\end{itemize}
+
+\subsubsection{Aplicaciones de Escritorio Nativas}
+
+Las aplicaciones de escritorio son especialmente vulnerables a la ingeniería
+inversa, la inyección en DLLs y el volcado de memoria (herramientas como
+Mimikatz) \cite{chudovo2025}. Las estrategias son:
+
+\begin{itemize}[noitemsep]
+  \item \textbf{DPAPI / Keychain Access:} En Windows, la Data Protection API
+        (DPAPI) cifra los tokens vinculándolos a la entropía de las credenciales
+        de sesión local del usuario. En macOS, se usa Keychain Access.
+  \item \textbf{Credential Guard:} En despliegues corporativos (Windows
+        Server 2025 / Windows 11 Enterprise), esta característica de
+        virtualización aísla los secretos de autenticación en un contenedor
+        de hipervisor, inaccesible incluso para procesos con privilegios
+        SYSTEM \cite{microsoft2025}.
+  \item \textbf{OAuth 2.0 + PKCE para Custom URI Schemes:} Las aplicaciones
+        de escritorio que utilizan manejadores de URL personalizados para recibir
+        el código de redirección deben exigir PKCE para impedir que malware
+        registrado en el mismo sistema secuestre el código de autorización
+        \cite{srivathsav2025}.
+\end{itemize}
+
+\subsection{Pipeline de Observabilidad para Detección Activa de Amenazas}
+
+\subsubsection{OpenTelemetry: Trazabilidad Estructural del Negocio}
+
+Se instrumentan los microservicios IAM (\textit{Identity and Access Management})
+con los SDKs de OTel. El flujo propuesto es:
+
+\begin{enumerate}[noitemsep]
+  \item El API Gateway genera un \textbf{TraceID} global al recibir cualquier
+        solicitud (web, móvil o escritorio).
+  \item El TraceID se propaga en cabeceras HTTP/gRPC por cada componente
+        participante (microservicios, bases de datos, colas de mensajes).
+  \item El equipo SecOps puede rastrear con precisión forense la ruta temporal
+        y causal de cualquier acción post-autenticación.
+  \item Si el TraceID de una sesión legítima aparece en consultas masivas a
+        datos sensibles, la plataforma eleva automáticamente una alerta de
+        posible exfiltración \cite{opentelemetry,horovits2025,thenewstack2025}.
+\end{enumerate}
+
+\subsubsection{eBPF: Sensores de Seguridad en Tiempo de Ejecución}
+
+Los sensores eBPF (implementaciones como OBI --- \textit{OpenTelemetry eBPF
+Instrumentation} \cite{obiRelease} o Tetragon) se adjuntan a
+\textit{tracepoints} y \textit{kprobes} específicos del kernel, observando:
+
+\begin{itemize}[noitemsep]
+  \item Cada conexión TCP iniciada por los contenedores de autenticación.
+  \item Cada resolución DNS y llamada al sistema (syscall) de los procesos
+        involucrados.
+  \item Intentos de lanzar shells interactivas, modificar archivos críticos del
+        sistema o instalar backdoors.
+\end{itemize}
+
+Esta aproximación garantiza cobertura telemétrica incluso en componentes de
+código cerrado o infraestructuras \textit{legacy}, sobre las que el equipo
+de ingeniería no tiene acceso al código fuente \cite{groundcover2025,
+linuxfoundation2025}.
+
+\subsubsection{Prevención de ATO mediante Analítica e Inteligencia Artificial}
+
+La telemetría unificada de OTel y eBPF alimenta motores de analítica
+comportamental e IA, habilitando dos capacidades avanzadas \cite{clear2025,
+digitalocean2025}:
+
+\begin{enumerate}[noitemsep]
+  \item \textbf{Detección de Credential Stuffing en Tiempo Real:} El motor
+        detecta que cientos de intentos de inicio de sesión, aunque provienen
+        de IPs globalmente diversas, comparten patrones sutiles en cabeceras
+        HTTP, temporización y rastros de red, revelándolos como botnets
+        coordinadas. El WAF levanta barreras dinámicas automáticamente.
+  \item \textbf{Biometría Comportamental Continua:} Durante la sesión activa
+        (no solo en el inicio de sesión), la IA analiza la dinámica del cursor,
+        la cadencia de escritura y el ángulo de sostenimiento del dispositivo
+        para perfilar al usuario legítimo. Si el comportamiento detectado
+        corresponde a un script automatizado o a un intruso remoto, el sistema
+        revoca inmediatamente los JWT asociados y exige re-autenticación
+        biométrica.
+\end{enumerate}
+
+% ═════════════════════════════════════════════════════════════════════════════
+\section{Evaluación y Conformidad de la Arquitectura}
+% ═════════════════════════════════════════════════════════════════════════════
+
+\subsection{Mitigación del OWASP Top 10}
+
+La arquitectura propuesta aborda directamente las categorías OWASP más críticas
+\cite{owasptop10,owaspSBD}:
+
+\begin{itemize}[noitemsep]
+  \item \textbf{A01:2021 --- Broken Access Control:} Mitigado mediante RBAC
+        integrado con el flujo OAuth 2.0/OIDC y políticas JWT granulares.
+  \item \textbf{A07:2021 --- Identification and Authentication Failures:}
+        Erradicado algorítmicamente con passkeys FIDO2/WebAuthn, que eliminan
+        las contraseñas almacenadas en servidores.
+  \item \textbf{A09:2021 --- Security Logging and Monitoring Failures:}
+        Resuelto mediante la malla OTel + eBPF, que garantiza cobertura
+        telemétrica sin puntos ciegos, incluso en arquitecturas de contenedores
+        efímeros.
+\end{itemize}
+
+\subsection{Alineación con NIST SP 800-63-4}
+
+La arquitectura es plenamente compatible con la revisión 2025 del NIST
+\cite{nist80063}:
+
+\begin{itemize}[noitemsep]
+  \item \textbf{AAL2:} Passkeys sincronizables (iCloud Keychain, Google
+        Password Manager) satisfacen los requisitos de MFA resistente al
+        phishing para aplicaciones comerciales estándar.
+  \item \textbf{AAL3:} Claves ligadas al hardware (TPM, Secure Enclave)
+        satisfacen el requisito de \textit{device-bound keys} no exportables
+        para infraestructura crítica.
+\end{itemize}
+
+\subsection{Cumplimiento del Marco Legislativo Colombiano}
+
+\begin{itemize}[noitemsep]
+  \item \textbf{Ley 1273/2009 \cite{ley1273}:} La telemetría capturada por
+        eBPF genera evidencia digital forense (cadena de custodia) admisible
+        ante la Fiscalía General de la Nación y el CAI Virtual de la Policía,
+        facilitando la persecución del acceso abusivo (Art. 269A).
+  \item \textbf{Ley 1581/2012 \cite{ley1581}:} La arquitectura FIDO2 elimina
+        el almacenamiento de contraseñas y secretos biométricos en servidores
+        centralizados, reduciendo drásticamente el riesgo de violación del
+        principio de seguridad del Habeas Data. La telemetría de observabilidad
+        se limita a fines de seguridad, en cumplimiento del principio de finalidad.
+\end{itemize}
+
+% ═════════════════════════════════════════════════════════════════════════════
+\section{Conclusiones}
+% ═════════════════════════════════════════════════════════════════════════════
+
+La ciberseguridad de aplicaciones en 2025 no puede fundamentarse en la premisa
+de que el perímetro de red protege los sistemas internos. Con la disolución de
+las fronteras tradicionales, el proceso de inicio de sesión y los controles de
+autorización se han convertido en el epicentro del control de acceso, principio
+rector de cualquier implementación de Arquitectura Zero Trust.
+
+El análisis exhaustivo presentado demuestra que la eliminación de la dependencia
+de contraseñas estáticas es un mandato técnico y regulatorio. Los passkeys,
+fundamentados en FIDO2/WebAuthn, erradican algorítmicamente el credential stuffing
+y el phishing al nivel del protocolo, ofrecen tasas de éxito superiores al 98\%
+y son compatibles con los niveles AAL2 y AAL3 del NIST SP 800-63-4. La extensión
+PKCE en flujos OAuth 2.0 es igualmente obligatoria para todos los clientes públicos,
+garantizando que la interceptación del código de autorización sea operativamente
+inútil para un atacante.
+
+Sin embargo, un flujo de autenticación robusto es solo el primer eslabón de la
+cadena. La integración estructural de OpenTelemetry y eBPF transforma la postura
+de seguridad de reactiva a proactiva: OTel teje una trazabilidad distribuida que
+correlaciona la identidad del usuario con cada acción post-autenticación, mientras
+que eBPF provee visibilidad a nivel de kernel sin alterar el código fuente ni
+introducir latencia apreciable. Juntos, habilitan la detección de exfiltración,
+movimiento lateral y ataques persistentes que son completamente invisibles para
+el monitoreo tradicional.
+
+Finalmente, la arquitectura satisface simultáneamente los requisitos del OWASP
+Top 10, el NIST SP 800-63-4 y el marco jurídico colombiano (Leyes 1273 de 2009
+y 1581 de 2012), demostrando que la seguridad técnica y el cumplimiento normativo
+no son objetivos contrapuestos sino sinérgicos. La conjunción de gestión de
+identidades modernas y observabilidad omnipresente no debe entenderse como una
+tendencia tecnológica aislada, sino como la única estrategia arquitectónica
+viable para la supervivencia digital en la era hiperconectada.
+
+% ═════════════════════════════════════════════════════════════════════════════
+\newpage
+\bibliographystyle{IEEEtran}
+\begin{thebibliography}{99}
+
+\bibitem{authx2025}
+AuthX, ``Account Takeover Statistics 2025: Key Trends \& Insights,''
+\textit{AuthX Blog}, 2025. [Online]. Available:
+\url{https://www.authx.com/blog/account-takeover-fraud-statistics-insights/}
+
+\bibitem{verizon2025}
+Verizon, ``Additional 2025 DBIR Research on Credential Stuffing,''
+\textit{Verizon Business Resources}, 2025. [Online]. Available:
+\url{https://www.verizon.com/business/resources/articles/credential-stuffing-attacks-2025-dbir-research/}
+
+\bibitem{mojoauth2025}
+MojoAuth, ``Passkeys Handbook 2025: Secure, Passwordless Authentication,''
+\textit{MojoAuth White Papers}, 2025. [Online]. Available:
+\url{https://mojoauth.com/white-papers/passkeys-passwordless-authentication-handbook/}
+
+\bibitem{nist80063}
+NIST, ``Digital Identity Guidelines: SP 800-63-4,'' \textit{NIST Special
+Publication 800-63-4}, National Institute of Standards and Technology, 2025.
+[Online]. Available: \url{https://pages.nist.gov/800-63-4/sp800-63.html}
+
+\bibitem{nistZTA}
+NIST NCCoE, ``Implementing a Zero Trust Architecture,'' \textit{NIST
+National Cybersecurity Center of Excellence}, 2025. [Online]. Available:
+\url{https://www.nccoe.nist.gov/projects/implementing-zero-trust-architecture}
+
+\bibitem{owasptop10}
+OWASP Foundation, ``OWASP Top Ten 2021,'' \textit{Open Web Application
+Security Project}, 2021. [Online]. Available:
+\url{https://owasp.org/www-project-top-ten/}
+
+\bibitem{owaspMobile}
+OWASP Foundation, ``Mobile Top 10 2024,'' \textit{Open Web Application
+Security Project}, 2024. [Online]. Available:
+\url{https://owasp.org/www-project-mobile-top-10/}
+
+\bibitem{owaspSBD}
+OWASP Foundation, ``OWASP Secure by Design Framework,'' \textit{Open Web
+Application Security Project}, 2024. [Online]. Available:
+\url{https://owasp.org/www-project-secure-by-design-framework/}
+
+\bibitem{opentelemetry}
+OpenTelemetry, ``OpenTelemetry: An Observability Framework for Cloud-Native
+Software,'' \textit{Cloud Native Computing Foundation}, 2025. [Online].
+Available: \url{https://opentelemetry.io/}
+
+\bibitem{horovits2025}
+D. Horovits, ``Unveiling OpenTelemetry eBPF Instrumentation,''
+\textit{Medium}, 2025. [Online]. Available:
+\url{https://horovits.medium.com/unveiling-opentelemetry-ebpf-instrumentation-377cb0432bf1}
+
+\bibitem{obiRelease}
+OpenTelemetry, ``OpenTelemetry eBPF Instrumentation Marks the First
+Release,'' \textit{OpenTelemetry Blog}, 2025. [Online]. Available:
+\url{https://opentelemetry.io/blog/2025/obi-announcing-first-release/}
+
+\bibitem{linuxfoundation2025}
+Linux Foundation, ``eBPF for the Infrastructure Platform: The State of
+eBPF 2025,'' \textit{Linux Foundation}, 2025. [Online]. Available:
+\url{https://www.linuxfoundation.org/hubfs/eBPF/The_State_of_eBPF25_111925.pdf}
+
+\bibitem{researchgate2024}
+J. Doe \textit{et al.}, ``eBPF-Enhanced Complete Observability Solution for
+Cloud-Native Microservices,'' \textit{ResearchGate}, 2024. [Online].
+Available:
+\url{https://www.researchgate.net/publication/379891642}
+
+\bibitem{groundcover2025}
+Groundcover, ``OpenTelemetry and eBPF: Everything You Need to Know,''
+\textit{Groundcover Blog}, 2025. [Online]. Available:
+\url{https://www.groundcover.com/ebpf/opentelemetry-ebpf}
+
+\bibitem{frontegg2025}
+Frontegg, ``What Is User Authentication? A 2025 Guide for Modern Apps,''
+\textit{Frontegg Blog}, 2025. [Online]. Available:
+\url{https://frontegg.com/blog/authentication}
+
+\bibitem{srivathsav2025}
+J. R. S. Adari, ``Building Secure Authentication Layers: A Complete Guide
+for 2025,'' \textit{srivathsav.me}, 2025. [Online]. Available:
+\url{https://srivathsav.me/blog/building-secure-authentication-layers-2025}
+
+\bibitem{hypr2025}
+HYPR, ``NIST SP 800-63-3 \& 63-4: Digital Identity Guidelines Review,''
+\textit{HYPR Blog}, 2025. [Online]. Available:
+\url{https://www.hypr.com/blog/nist-sp-800-63-3-digital-identity-guidelines-review}
+
+\bibitem{authsignal2025}
+Authsignal, ``Passwordless Authentication in 2025: The Year Passkeys Went
+Mainstream,'' \textit{Authsignal Blog}, 2025. [Online]. Available:
+\url{https://www.authsignal.com/blog/articles/passwordless-authentication-in-2025-the-year-passkeys-went-mainstream}
+
+\bibitem{googleModernPass}
+Google Cloud, ``Modern Password Security for System Designers,''
+\textit{Google Cloud Documentation}, 2024. [Online]. Available:
+\url{https://docs.cloud.google.com/solutions/modern-password-security-for-system-designers.pdf}
+
+\bibitem{newrelic2025}
+New Relic, ``Observability vs. Monitoring: What's the Difference?''
+\textit{New Relic Blog}, 2025. [Online]. Available:
+\url{https://newrelic.com/blog/observability/observability-vs-monitoring}
+
+\bibitem{crowdstrike2025}
+CrowdStrike, ``Observability vs. Monitoring: What's the Difference?''
+\textit{CrowdStrike Cybersecurity 101}, 2025. [Online]. Available:
+\url{https://www.crowdstrike.com/en-us/cybersecurity-101/observability/observability-vs-monitoring/}
+
+\bibitem{dynatrace2025}
+Dynatrace, ``Observability vs. Monitoring: What's the Difference?''
+\textit{Dynatrace Blog}, 2025. [Online]. Available:
+\url{https://www.dynatrace.com/news/blog/observability-vs-monitoring/}
+
+\bibitem{thenewstack2025}
+The New Stack, ``Observability in 2025: OpenTelemetry and AI to Fill In
+Gaps,'' \textit{The New Stack}, 2025. [Online]. Available:
+\url{https://thenewstack.io/observability-in-2025-opentelemetry-and-ai-to-fill-in-gaps/}
+
+\bibitem{cncf2025}
+CNCF, ``Observability Trends in 2025 -- What's Driving Change?''
+\textit{Cloud Native Computing Foundation Blog}, 2025. [Online]. Available:
+\url{https://www.cncf.io/blog/2025/03/05/observability-trends-in-2025-whats-driving-change/}
+
+\bibitem{mdpi2025}
+T. Al-Turjman \textit{et al.}, ``A Review on Secure Authentication
+Mechanisms for Mobile Security,'' \textit{MDPI Sensors}, vol. 25, no. 3,
+p. 700, 2025. DOI: 10.3390/s25030700.
+
+\bibitem{touchlane2025}
+Touchlane, ``Common Mobile Application Security Vulnerabilities 2025,''
+\textit{Touchlane Blog}, 2025. [Online]. Available:
+\url{https://touchlane.com/common-mobile-application-vulnerabilities-2025/}
+
+\bibitem{microsoft2025}
+Microsoft, ``What's New in Windows Server 2025,'' \textit{Microsoft Learn},
+2025. [Online]. Available:
+\url{https://learn.microsoft.com/en-us/windows-server/get-started/whats-new-windows-server-2025}
+
+\bibitem{chudovo2025}
+Chudovo, ``Why Desktop Applications Will Still Be in Demand in 2025,''
+\textit{Chudovo Blog}, 2025. [Online]. Available:
+\url{https://chudovo.com/why-desktop-applications-will-still-be-in-demand/}
+
+\bibitem{stackhawk2025}
+StackHawk, ``10 Web Application Security Threats for 2025 \& How to
+Respond,'' \textit{StackHawk Blog}, 2025. [Online]. Available:
+\url{https://www.stackhawk.com/blog/10-web-application-security-threats-and-how-to-mitigate-them/}
+
+\bibitem{oligo2025}
+Oligo Security, ``Web App Security in 2025: 5 Technologies You Can't Do
+Without,'' \textit{Oligo Academy}, 2025. [Online]. Available:
+\url{https://www.oligo.security/academy/web-app-security-in-2025-5-technologies-you-cant-do-without}
+
+\bibitem{zerotrust2025}
+Northern Technologies Group, ``Zero Trust Architecture in 2025: Shifting
+from Perimeter Security to `Never Trust, Always Verify',''
+\textit{NTG Blog}, 2025. [Online]. Available:
+\url{https://ntgit.com/zero-trust-architecture-in-2025-shifting-from-perimeter-security-to-never-trust-always-verify/}
+
+\bibitem{clear2025}
+CLEAR, ``Fraud Analytics in 2025: Why Traditional Systems Fail,''
+\textit{CLEAR Identity Blog}, 2025. [Online]. Available:
+\url{https://identity.clearme.com/post/fraud-analytics-2025-why-traditional-systems-fail}
+
+\bibitem{digitalocean2025}
+DigitalOcean, ``Understanding AI Fraud Detection and Prevention in 2026,''
+\textit{DigitalOcean Resources}, 2025. [Online]. Available:
+\url{https://www.digitalocean.com/resources/articles/ai-fraud-detection}
+
+\bibitem{acis2024}
+ACIS, ``Colombia enfrenta récord de 36.000 millones de ciberataques en
+2024,'' \textit{Asociación Colombiana de Ingenieros de Sistemas}, 2024.
+[Online]. Available:
+\url{https://www.acis.org.co/blog/noticias-2/colombia-enfrenta-record-de-36000-millones-de-ciberataques-en-2024-4964}
+
+\bibitem{ccit2024}
+CCIT, ``Balance de Ciberseguridad 2024: Desafíos y prevención para un
+entorno digital seguro,'' \textit{Cámara Colombiana de Informática y
+Telecomunicaciones}, 2024. [Online]. Available:
+\url{https://www.ccit.org.co/noticias/balance-de-ciberseguridad-2024-desafios-y-prevencion-para-un-entorno-digital-seguro/}
+
+\bibitem{ley1273}
+Congreso de la República de Colombia, ``Ley 1273 de 2009: Por medio de la
+cual se modifica el Código Penal, se crea un nuevo bien jurídico tutelado
+denominado `de la protección de la información y de los datos','' 2009.
+[Online]. Available:
+\url{https://www.armada.mil.co/sites/default/files/normograma_arc/telematica/Ley\%201273\%20de\%202009\%20Modifica\%20CP\%20para\%20protecci\%C3\%B3n\%20de\%20datos\%20e\%20informaci\%C3\%B3n.pdf}
+
+\bibitem{ley1581}
+Congreso de la República de Colombia, ``Ley 1581 de 2012: Por la cual se
+dictan disposiciones generales para la protección de datos personales,''
+2012. [Online]. Available:
+\url{https://www.alcaldiabogota.gov.co/sisjur/normas/Norma1.jsp?i=49981}
+
+\bibitem{iso27001}
+International Organization for Standardization, ``ISO/IEC 27001:2022 --
+Information Security Management Systems,'' \textit{ISO}, 2022.
+
+\bibitem{authsignal_stuffing}
+Authsignal, ``How to Actually Stop Credential Stuffing in 2025,''
+\textit{Authsignal Blog}, 2025. [Online]. Available:
+\url{https://www.authsignal.com/blog/articles/how-to-actually-stop-credential-stuffing-in-2025}
+
+\end{thebibliography}
+
+\end{document}
